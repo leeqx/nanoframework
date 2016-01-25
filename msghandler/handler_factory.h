@@ -13,7 +13,7 @@ class CBaseHandler
 class CNanoFactory
 {
     public:
-        CNanoFactory():m_pNanoFactory(NULL)
+        CNanoFactory()
         {
             pthread_mutex_init(&m_mutex,NULL);
         }
@@ -35,7 +35,7 @@ class CNanoFactory
             return NULL;
         }
     public:
-        CNanoFactory *m_pNanoFactory;
+        static  CNanoFactory *m_pNanoFactory;
         static  pthread_mutex_t m_mutex;
 };
 
