@@ -3,6 +3,7 @@
  */
 #pragma once
 #include <pthread.h>
+#include "msghandler/msg.h"
 
 class CBaseHandler
 {
@@ -30,7 +31,7 @@ class CNanoFactory
             pthread_mutex_unlock(&m_mutex);
             return m_pNanoFactory;
         }
-        CBaseHandler* CreateHandleByType(char* msg)
+        CBaseHandler* CreateHandleByType(t_msg* msg)
         {
             return NULL;
         }

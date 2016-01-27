@@ -3,6 +3,7 @@
 
 #include "common/global.h"
 #include "net.h"
+#include "msghandler/handler_factory.h"
 
 CNet::CNet(int port,int listenSize):m_listenFd(-1),m_listendSize(5),m_epollFd(-1)
 {}
@@ -215,10 +216,21 @@ int CNet::EpollWait()
                 }
                 else if(m_events[i].event & EPOLLIN) // read event
                 {
-                 
+                    if(0 == this->OnRead(m_events[i].data.fd))
+                    {
+                        AddEpoll(clientFd,EPOLLOUT|EPOLLET);
+                    }
+                    else if(-1 == ret)
+                    {
+                        DelEpoll(clientFd,EPOLLIN|EPOLLET);
+                    }
                 }
                 else if(m_events[i].event & EPOLLOUT) // write event
                 {
+                    if(0 == this->OnRead(m_events[i].data.fd))
+                    {
+                    
+                    }
                 
                 }
             }
@@ -232,6 +244,66 @@ int CNet::EpollWait()
     }
 
 }
+
+int CNet::OnRead(int fd)
+{
+    if(fd < 0)
+    {
+        LOG(ERROR,"fd is invalid:%d",fd);
+        return -1;
+    }
+    char buf[1460] = {0};
+    int retLen     = 0;
+
+    t_msg *newmsg = NewMsg(sizeof(buf));
+
+    for(;;)
+    {
+        retLen = recv(fd,buf,sizeof(buf),MSG_DONTWAIT);
+        if(0 == retLen)
+        {
+            //客户端主动断开
+            close(fd);
+            break;
+        }
+        else if(-1 == retLen)
+        {
+            if(errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                continue;
+            }
+            else
+            {
+                break;
+            }
+        }
+        else if(retLen < sizeof(buf))
+        {
+            AttachBuff2Msg(&newmsg,buf,retLen);
+            break;
+        }
+        else
+        {
+            AttachBuff2Msg(&newmsg,buf,retLen);
+        }
+    }
+    
+    //交由业务进行处理:thread
+}
+int CNet::OnWrite(int fd)
+{
+    if(fd < 0)
+    {
+        LOG(ERROR,"fd is invalid:%d",fd);
+        return -1;
+    }
+}
+/**
+ *讲处理函数与fd绑定
+ */
+int CNet::AttachHandler(int fd,(void*)(*func)(void*));
+
+
 /**
  * 将数据分发到后端，提供给后端线程处理
  */

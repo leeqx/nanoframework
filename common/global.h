@@ -27,3 +27,12 @@
 
 #define LOG(level,fmt,...) __LOG(stdout,level,fmt,...)
 
+#define ASSERT_EQ(a,b) if((a)==(b)) \
+                    { \
+                        LOG(DEBUG, "assert failed"); \
+                    }
+
+#define ASSERT_NE(a,b) if((a)!=(b)) \
+                    { \
+                        LOG(DEBUG, "assert failed"); \
+                    }
