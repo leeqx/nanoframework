@@ -5,7 +5,7 @@
 #define    INFO 1
 #define    WARN 2
 
-#define __LOG(fd,level,fmt,...) \
+#define __LOG(fd,level,fmt...) \
     time_t cur; \
     time(&cur); \
     if((level) == ERROR)\
@@ -25,7 +25,7 @@
         fprintf(fd,"%ld,INFO:%s-%s-%d:" fmt,cur,__FILE__,__func__,__LINE__,##__VA_ARGS__);\
     }
 
-#define LOG(level,fmt,...) __LOG(stdout,level,fmt,...)
+#define LOG(level,fmt...) __LOG(stdout,level,fmt...)
 
 #define ASSERT_EQ(a,b) if((a)==(b)) \
                     { \
