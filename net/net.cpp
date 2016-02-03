@@ -52,7 +52,7 @@ int CNet::SetKeepalive(int fd,bool alive,int idleTime,int interval,int count)
     
     setsockopt(fd,SOL_SOCKET,SO_KEEPALIVE,(char*)&keepAlive,sizeof(keepAlive));
     setsockopt(fd,SOL_TCP,TCP_KEEPIDLE,(char*)&keepIdle,sizeof(keepIdle));
-    setsockopt(fd,SOL_TCP,TCP_KEEPINTERVAL,(char*)&keepIntv,sizeof(keepIntv));
+    setsockopt(fd,SOL_TCP,TCP_KEEPINTVL,(char*)&keepIntv,sizeof(keepIntv));
     setsockopt(fd,SOL_TCP,TCP_KEEPCNT,(char*)&keepCount,sizeof(keepCount));
 
     return 0;
@@ -99,7 +99,7 @@ int CNet::CheckTCPConfig()
 
 }
 
-int CNet::initSocket(int size)
+int CNet::initSocket(int port,int size)
 {
     m_listenFd = socket(AF_INET,SOCK_STREAM,0);
     if ( m_listenFd < 0)
@@ -137,7 +137,7 @@ int CNet::CreateEpoll(int size/*=65535*/)
     }
     if(0 != (m_epollFd = epoll_create(size)) )
     {
-        LOG(ERROR,"create epoll failed:%s\n",strerror(errrno));
+        LOG(ERROR,"create epoll failed:%s\n",strerror(errno));
         return -1;
     }
 
@@ -161,7 +161,7 @@ int CNet::DelEpoll(int fd,int fflag)
 {
     struct epoll_event event;
     event.data.fd = fd;
-    event.data = fflag;
+    event.events  = fflag;
     if(0 != epoll_ctl(m_epollFd,EPOLL_CTL_DEL,fd,&event))
     {
         LOG(ERROR,"delete epoll event failed:%s",strerror(errno));
@@ -174,7 +174,7 @@ int CNet::ModEpoll(int fd,int fflag)
 {
     struct epoll_event event;
     event.data.fd = fd;
-    event.event = fflag;
+    event.events = fflag;
 
     if(0 != epoll_ctl(m_epollFd,EPOLL_CTL_MOD,fd,&event))
     {
@@ -188,7 +188,8 @@ int CNet::EpollWait()
 
     int max = 0;
     struct sockaddr_in clientAddr;
-    socklen_t clientAddrLen = sizeof(clientaddr);
+    socklen_t clientAddrLen = sizeof(clientAddr);
+    int clientFd = 0;
 
     for(;;)
     {
@@ -200,11 +201,11 @@ int CNet::EpollWait()
                 if(m_events[i].data.fd == m_listenFd)
                 {// accept client connect
 #ifndef _GNU_SOURCE
-                    int clientFd = accept(m_listendFd,(struct sockaddr*)&clientaddr,&clientAddrLen);
+                    int clientFd = accept(m_listendFd,(struct sockaddr*)&clientAddr,&clientAddrLen);
                     SetNonBlock(clientFd);
 #else
                     // clientFd will set to :non-block
-                    int clientFd = accept4(m_listenFd,(struct sockaddr*)&clientaddr,&clientAddrLen,SOCK_NONBLOCK);
+                    clientFd = accept4(m_listenFd,(struct sockaddr*)&clientAddr,&clientAddrLen,SOCK_NONBLOCK);
 #endif
                     if(clientFd < 0)
                     {
@@ -214,18 +215,18 @@ int CNet::EpollWait()
                     // add to epoll events
                     AddEpoll(clientFd,EPOLLIN|EPOLLET);
                 }
-                else if(m_events[i].event & EPOLLIN) // read event
+                else if(m_events[i].events & EPOLLIN) // read event
                 {
                     if(0 == this->OnRead(m_events[i].data.fd))
                     {
                         AddEpoll(clientFd,EPOLLOUT|EPOLLET);
                     }
-                    else if(-1 == ret)
+                    else if(-1 == max)
                     {
                         DelEpoll(clientFd,EPOLLIN|EPOLLET);
                     }
                 }
-                else if(m_events[i].event & EPOLLOUT) // write event
+                else if(m_events[i].events & EPOLLOUT) // write event
                 {
                     if(0 == this->OnRead(m_events[i].data.fd))
                     {
@@ -301,7 +302,9 @@ int CNet::OnWrite(int fd)
 /**
  *讲处理函数与fd绑定
  */
-int CNet::AttachHandler(int fd,(void*)(*func)(void*));
+int CNet::AttachHandler(int fd,void*(*func)(void*))
+{
+}
 
 
 /**

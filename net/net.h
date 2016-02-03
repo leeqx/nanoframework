@@ -7,15 +7,17 @@
 #include <sys/socket.h>
 #include <sys/epoll.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+
 
 #include <fcntl.h>
 
 class CNet
 {
     public:
-        CNet();
+        CNet(int,int);
         virtual ~CNet();
     public:
         /**
@@ -65,7 +67,7 @@ class CNet
         /**
          *讲处理函数与fd绑定
          */
-        int AttachHandler(int fd,(void*)(*func)(void*));
+        int AttachHandler(int fd,void*(*func)(void*));
 
         /**
          * 讲数据分发到后端，提供给后端线程处理
