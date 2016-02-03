@@ -5,7 +5,7 @@
 #include "net.h"
 #include "msghandler/handler_factory.h"
 
-CNet::CNet(int port,int listenSize):m_listenFd(-1),m_listendSize(5),m_epollFd(-1)
+CNet::CNet(int listenSize):m_listenFd(-1),m_listendSize(listenSize),m_epollFd(-1)
 {}
 CNet::~CNet(){}
 /**
@@ -99,8 +99,9 @@ int CNet::CheckTCPConfig()
 
 }
 
-int CNet::initSocket(int port,int size)
+int CNet::initSocket(int port,int epollSize)
 {
+    m_port = port;
     m_listenFd = socket(AF_INET,SOCK_STREAM,0);
     if ( m_listenFd < 0)
     {
@@ -124,6 +125,7 @@ int CNet::initSocket(int port,int size)
         LOG(ERROR,"listen failed:%s",strerror(errno));
         return -1;
     }
+    this->CreateEpoll(epollSize);
     return 0;
 }
 /**
@@ -135,7 +137,7 @@ int CNet::CreateEpoll(int size/*=65535*/)
     {
         close(m_epollFd);
     }
-    if(0 != (m_epollFd = epoll_create(size)) )
+    if(-1 == (m_epollFd = epoll_create(size)) )
     {
         LOG(ERROR,"create epoll failed:%s\n",strerror(errno));
         return -1;
@@ -147,6 +149,7 @@ int CNet::CreateEpoll(int size/*=65535*/)
 }
 int CNet::AddEpoll(int fd,int fflag)
 {
+    LOG(INFO,"add %d to epoll:%d",fd,fflag);
     struct epoll_event event;
     event.data.fd = fd;
     event.events = fflag;
@@ -190,7 +193,7 @@ int CNet::EpollWait()
     struct sockaddr_in clientAddr;
     socklen_t clientAddrLen = sizeof(clientAddr);
     int clientFd = 0;
-
+    LOG(INFO,"begin handle net msg,port:%d",m_port);
     for(;;)
     {
         max = epoll_wait(m_epollFd,m_events,MAX_EVENTS_SIZE,-1);

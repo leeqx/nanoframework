@@ -17,7 +17,7 @@
 class CNet
 {
     public:
-        CNet(int,int);
+        CNet(int);
         virtual ~CNet();
     public:
         /**
@@ -55,7 +55,7 @@ class CNet
 
         int CheckTCPConfig();
 
-        int initSocket(int port,int size);
+        int initSocket(int port,int epollSize);
         int CreateEpoll(int size=65535);
         int AddEpoll(int fd,int fflag);
         int DelEpoll(int fd,int fflag);
