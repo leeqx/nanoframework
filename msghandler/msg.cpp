@@ -1,4 +1,5 @@
 #include "msghandler/msg.h"
+#include "common/global.h"
 
 t_msg* NewMsg(int size)
 {
@@ -39,7 +40,9 @@ t_msg* ReNewMsg(t_msg *srcmsg,int newsize)
         return NULL; 
     }
 
+    LOG(DEBUG,"before:%p %p\n",srcmsg,(int*)malloc(1));
     t_msg *newmsg = NewMsg(newsize);
+    LOG(DEBUG,"after:%p\n",newmsg);
     if(NULL != newmsg)
     {
         memcpy(newmsg,srcmsg,sizeof(t_msg));

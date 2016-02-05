@@ -180,6 +180,7 @@ int CNet::ModEpoll(int fd,int fflag)
     event.data.fd = fd;
     event.events = fflag;
 
+    LOG(INFO,"Mod %d to epoll,events:%lu",fd,fflag);
     if(0 != epoll_ctl(m_epollFd,EPOLL_CTL_MOD,fd,&event))
     {
         LOG(ERROR,"delete epoll event failed:%s",strerror(errno));
@@ -219,26 +220,22 @@ int CNet::EpollWait()
                     }
                     // add to epoll events
                     AddEpoll(clientFd,EPOLLIN|EPOLLET);
-                    AddEpoll(m_epollFd,EPOLLIN|EPOLLET);
                 }
                 else if(m_events[i].events & EPOLLIN) // read event
                 {
                     if(0 == this->OnRead(m_events[i].data.fd))
-                    {
-                        AddEpoll(clientFd,EPOLLOUT|EPOLLET);
+                    {// client close socket
+                        DelEpoll(m_events[i].data.fd,EPOLLIN|EPOLLET);
                     }
-                    else if(-1 == max)
-                    {
-                        DelEpoll(clientFd,EPOLLIN|EPOLLET);
-                    }
+                    ModEpoll(m_events[i].data.fd,EPOLLOUT|EPOLLET);
                 }
                 else if(m_events[i].events & EPOLLOUT) // write event
                 {
                     if(this->OnWrite(m_events[i].data.fd) < 0)
                     {
-                        this->DelEpoll(m_events[i].data.fd,EPOLLET|EPOLLOUT);
+                        this->DelEpoll(m_events[i].data.fd,EPOLLOUT);
                     }
-                
+                    ModEpoll(m_events[i].data.fd,EPOLLIN|EPOLLET);
                 }
             }
         
@@ -259,7 +256,7 @@ int CNet::OnRead(int fd)
         LOG(ERROR,"fd is invalid:%d",fd);
         return -1;
     }
-    char buf[256] = {0};
+    char buf[2] = {0};
     int retLen     = 0;
 
     t_msg *newmsg = NewMsg(sizeof(buf));
@@ -280,6 +277,12 @@ int CNet::OnRead(int fd)
             {
                 LOG(INFO,"recv return -1,try recv msg again.");
                 continue;
+            }
+            else if(errno == ECONNRESET)
+            {
+                close(fd);
+                LOG(INFO,"Client fd[%d]reset socket\n",fd);
+                break;
             }
             else
             {
@@ -302,6 +305,7 @@ int CNet::OnRead(int fd)
     LOG(INFO,"msg:[%s] ,total len=%d\n",newmsg->buff,newmsg->len);
     //交由业务进行处理:thread
     //FreeMsg(newmsg);
+    return newmsg->len;
 }
 int CNet::OnWrite(int fd)
 {
@@ -310,20 +314,31 @@ int CNet::OnWrite(int fd)
         LOG(ERROR,"fd is invalid:%d",fd);
         return -1;
     }
-    int sendLen = send(fd,"ok",2,0);
-    if(-1 == sendLen)
+    int sendLen = 0;
+    char *pMsg = "HTTP/1.1 200 OK \n\n Connection: close\n\n";
+    int  totalLen = strlen(pMsg)+1;
+    int totalSendLen = 0;
+    while(1)
     {
-        if(errno == EAGAIN || errno == EWOULDBLOCK)
+        LOG(DEBUG,"Try to send\n");
+        sendLen = send(fd,pMsg,totalLen,0);
+        if(-1 == sendLen)
         {
-            sleep(1);   
-            if(-1==(sendLen = send(fd,"ok",2,0)))
+            LOG(ERROR,"Send to client fd[%d] failed:%s\n",fd,strerror(errno));
+            if(errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                LOG(ERROR,"Send to client fd[%d] failed:%s\n",fd,strerror(errno));
+                usleep(1000);   
+                continue;
             }
         }
+        totalSendLen += sendLen;
+        if(totalLen <= totalSendLen)
+        {
+            LOG(DEBUG,"Send response ok\n");
+            return sendLen;
+        }
+        LOG(INFO,"send lend:%d\n",sendLen);
     }
-    LOG(DEBUG,"Send response ok\n");
-    return sendLen;
 }
 /**
  *讲处理函数与fd绑定
