@@ -57,8 +57,8 @@ class CNet
 
         int initSocket(int port,int epollSize);
         int CreateEpoll(int size=65535);
-        int AddEpoll(int fd,int fflag);
-        int DelEpoll(int fd,int fflag);
+        int AddEpoll(int fd,long unsigned int fflag);
+        int DelEpoll(int fd,long unsigned int fflag);
         int ModEpoll(int fd,int fflag);
         int EpollWait();
 

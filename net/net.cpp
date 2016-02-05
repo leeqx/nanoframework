@@ -147,9 +147,9 @@ int CNet::CreateEpoll(int size/*=65535*/)
 
     return 0;
 }
-int CNet::AddEpoll(int fd,int fflag)
+int CNet::AddEpoll(int fd,long unsigned int fflag)
 {
-    LOG(INFO,"add %d to epoll:%d",fd,fflag);
+    LOG(INFO,"add %d to epoll,events:%lu",fd,fflag);
     struct epoll_event event;
     event.data.fd = fd;
     event.events = fflag;
@@ -160,7 +160,7 @@ int CNet::AddEpoll(int fd,int fflag)
     }
     return 0;
 }
-int CNet::DelEpoll(int fd,int fflag)
+int CNet::DelEpoll(int fd,long unsigned int fflag)
 {
     struct epoll_event event;
     event.data.fd = fd;
@@ -188,7 +188,6 @@ int CNet::ModEpoll(int fd,int fflag)
 }
 int CNet::EpollWait()
 {
-
     int max = 0;
     struct sockaddr_in clientAddr;
     socklen_t clientAddrLen = sizeof(clientAddr);
@@ -210,6 +209,8 @@ int CNet::EpollWait()
                     // clientFd will set to :non-block
                     clientFd = accept4(m_listenFd,(struct sockaddr*)&clientAddr,&clientAddrLen,SOCK_NONBLOCK);
 #endif
+                    char szIp[33]={0};
+                    LOG(DEBUG,"new client connect:%s\n",inet_ntop(AF_INET,(void*)&(clientAddr.sin_addr),szIp,clientAddrLen));
                     if(clientFd < 0)
                     {
                         LOG(ERROR,"accept client request failed:%s",strerror(errno));
@@ -217,6 +218,7 @@ int CNet::EpollWait()
                     }
                     // add to epoll events
                     AddEpoll(clientFd,EPOLLIN|EPOLLET);
+                    AddEpoll(m_epollFd,EPOLLIN|EPOLLET);
                 }
                 else if(m_events[i].events & EPOLLIN) // read event
                 {
@@ -256,7 +258,7 @@ int CNet::OnRead(int fd)
         LOG(ERROR,"fd is invalid:%d",fd);
         return -1;
     }
-    char buf[1460] = {0};
+    char buf[256] = {0};
     int retLen     = 0;
 
     t_msg *newmsg = NewMsg(sizeof(buf));
@@ -268,16 +270,19 @@ int CNet::OnRead(int fd)
         {
             //客户端主动断开
             close(fd);
+            LOG(INFO,"Client fd[%d]close socket\n",fd);
             break;
         }
         else if(-1 == retLen)
         {
             if(errno == EAGAIN || errno == EWOULDBLOCK)
             {
+                LOG(INFO,"recv return -1,try recv msg again.");
                 continue;
             }
             else
             {
+                LOG(ERROR,"recv return failed:%s\n",strerror(errno));
                 break;
             }
         }
@@ -290,8 +295,10 @@ int CNet::OnRead(int fd)
         {
             AttachBuff2Msg(&newmsg,buf,retLen);
         }
+        //LOG(INFO,"msg:[%s] len=%d,free=%d,newmsglen=%d\n",newmsg->buff,retLen,newmsg->free,newmsg->len);
     }
     
+    LOG(INFO,"msg:[%s] ,total len=%d\n",newmsg->buff,newmsg->len);
     //交由业务进行处理:thread
 }
 int CNet::OnWrite(int fd)
