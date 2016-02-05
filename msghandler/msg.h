@@ -7,7 +7,7 @@ typedef struct msg
 {
     int len;
     int free;
-    char *buff;
+    char buff[0];
 }t_msg;
 
 t_msg* NewMsg(int size);

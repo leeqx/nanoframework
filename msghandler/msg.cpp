@@ -4,10 +4,9 @@ t_msg* NewMsg(int size)
 {
     if(size < 0)
         return NULL;
-    t_msg *newmsg =(t_msg*) malloc(sizeof(t_msg));
+    t_msg *newmsg =(t_msg*) malloc(sizeof(t_msg)+size);
     ASSERT_EQ(newmsg,NULL);
 
-    newmsg->buff = (char*)malloc(size);
     newmsg->free = size;
     newmsg->len  = 0;
 
@@ -19,11 +18,6 @@ void FreeMsg(t_msg *msg)
 {
     if (NULL != msg)
     {
-        if(NULL != msg->buff)
-        {
-            free(msg->buff);
-            msg->buff = NULL;
-        }
         free(msg);
         msg = NULL;
     }
@@ -49,6 +43,7 @@ t_msg* ReNewMsg(t_msg *srcmsg,int newsize)
     if(NULL != newmsg)
     {
         memcpy(newmsg,srcmsg,sizeof(t_msg));
+        memcpy(newmsg->buff,srcmsg->buff,srcmsg->len);
         newmsg->free = newsize - newmsg->len;
         FreeMsg(srcmsg);
     }
@@ -59,12 +54,14 @@ t_msg* AttachBuff2Msg(t_msg**srcmsg,char* buff,int len)
 {
     if((*srcmsg)->free < len)
     {
-        *srcmsg = ReNewMsg(*srcmsg,(*srcmsg)->free+(*srcmsg)->len+len);
+        *srcmsg = ReNewMsg(*srcmsg,(*srcmsg)->free+(*srcmsg)->len+len*2);
         memcpy((*srcmsg)->buff + (*srcmsg)->len,buff,len);
+        (*srcmsg)->len += len;
     }
     else
     {
         memcpy((*srcmsg)->buff + (*srcmsg)->len,buff,len);
+        (*srcmsg)->len += len;
     }
 
     return *srcmsg;
