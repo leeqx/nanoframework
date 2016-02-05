@@ -8,7 +8,7 @@ int main(int argc,char* argv[])
     //
     // init server
     CNet net(123);
-    net.initSocket(9999,123);
-    net.EpollWait();
+    if(0 == net.initSocket(9999,123))
+        net.EpollWait();
     return 0;
 }
