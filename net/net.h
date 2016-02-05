@@ -38,7 +38,7 @@ class CNet
         /**
          *SOL_REUSEADDR
          */
-        int SetReuseAddr(int fd,bool onOff);
+        int SetReuseAddr(int fd,int onOff);
         /**
          * SO_SNDBUF
          */

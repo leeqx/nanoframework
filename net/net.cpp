@@ -60,15 +60,15 @@ int CNet::SetKeepalive(int fd,bool alive,int idleTime,int interval,int count)
 /**
  *SOL_REUSEADDR
  */
-int CNet::SetReuseAddr(int fd,bool onOff)
+int CNet::SetReuseAddr(int fd,int onOff)
 {
     if(fd < 0)
     {
         LOG(ERROR,"invalied fd");
         return -1;
     }
-    bool isReuseAddr = onOff;
-    if(0 != setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,(char*)&isReuseAddr,sizeof(isReuseAddr)))
+    int isReuseAddr = onOff;
+    if(0 != setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,(const char*)&isReuseAddr,sizeof(isReuseAddr)))
     {
         LOG(ERROR,"set reuseaddr failed:%s",strerror(errno)) ;
         return -1;
@@ -108,6 +108,7 @@ int CNet::initSocket(int port,int epollSize)
         LOG(ERROR,"Create socket failed:%s",strerror(errno));
         return -1;
     }
+    this->SetReuseAddr(m_listenFd,true);
     struct sockaddr_in serverAddr;
     bzero(&serverAddr,sizeof(serverAddr));
 
@@ -233,9 +234,9 @@ int CNet::EpollWait()
                 }
                 else if(m_events[i].events & EPOLLOUT) // write event
                 {
-                    if(0 == this->OnRead(m_events[i].data.fd))
+                    if(this->OnWrite(m_events[i].data.fd) < 0)
                     {
-                    
+                        this->DelEpoll(m_events[i].data.fd,EPOLLET|EPOLLOUT);
                     }
                 
                 }
@@ -300,6 +301,7 @@ int CNet::OnRead(int fd)
     
     LOG(INFO,"msg:[%s] ,total len=%d\n",newmsg->buff,newmsg->len);
     //交由业务进行处理:thread
+    //FreeMsg(newmsg);
 }
 int CNet::OnWrite(int fd)
 {
@@ -308,6 +310,20 @@ int CNet::OnWrite(int fd)
         LOG(ERROR,"fd is invalid:%d",fd);
         return -1;
     }
+    int sendLen = send(fd,"ok",2,0);
+    if(-1 == sendLen)
+    {
+        if(errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            sleep(1);   
+            if(-1==(sendLen = send(fd,"ok",2,0)))
+            {
+                LOG(ERROR,"Send to client fd[%d] failed:%s\n",fd,strerror(errno));
+            }
+        }
+    }
+    LOG(DEBUG,"Send response ok\n");
+    return sendLen;
 }
 /**
  *讲处理函数与fd绑定
