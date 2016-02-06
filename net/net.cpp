@@ -171,6 +171,7 @@ int CNet::DelEpoll(int fd,long unsigned int fflag)
         LOG(ERROR,"delete epoll event failed:%s",strerror(errno));
         return -1;
     }
+    close(fd);
     return 0;
 
 }
@@ -227,15 +228,21 @@ int CNet::EpollWait()
                     {// client close socket
                         DelEpoll(m_events[i].data.fd,EPOLLIN|EPOLLET);
                     }
-                    ModEpoll(m_events[i].data.fd,EPOLLOUT|EPOLLET);
+                    else
+                    {
+                        ModEpoll(m_events[i].data.fd,EPOLLOUT|EPOLLET);
+                    }
                 }
                 else if(m_events[i].events & EPOLLOUT) // write event
                 {
                     if(this->OnWrite(m_events[i].data.fd) < 0)
                     {
-                        this->DelEpoll(m_events[i].data.fd,EPOLLOUT);
+                        DelEpoll(m_events[i].data.fd,EPOLLOUT|EPOLLET);
                     }
-                    ModEpoll(m_events[i].data.fd,EPOLLIN|EPOLLET);
+                    else
+                    {
+                        ModEpoll(m_events[i].data.fd,EPOLLIN|EPOLLET);
+                    }
                 }
             }
         
@@ -243,8 +250,8 @@ int CNet::EpollWait()
         else if(-1 == max)
         {
             LOG(ERROR,"epoll_wait return failed:%s",strerror(errno));
+            break;
         }
-    
     }
 
 }
@@ -267,7 +274,6 @@ int CNet::OnRead(int fd)
         if(0 == retLen)
         {
             //客户端主动断开
-            close(fd);
             LOG(INFO,"Client fd[%d]close socket\n",fd);
             break;
         }
@@ -275,12 +281,12 @@ int CNet::OnRead(int fd)
         {
             if(errno == EAGAIN || errno == EWOULDBLOCK)
             {
+                usleep(1000);
                 LOG(INFO,"recv return -1,try recv msg again.");
                 continue;
             }
             else if(errno == ECONNRESET)
             {
-                close(fd);
                 LOG(INFO,"Client fd[%d]reset socket\n",fd);
                 break;
             }
@@ -305,7 +311,7 @@ int CNet::OnRead(int fd)
     LOG(INFO,"msg:[%s] ,total len=%d\n",newmsg->buff,newmsg->len);
     //交由业务进行处理:thread
     //FreeMsg(newmsg);
-    return newmsg->len;
+    return newmsg->len? newmsg->len:retLen;
 }
 int CNet::OnWrite(int fd)
 {
@@ -315,7 +321,7 @@ int CNet::OnWrite(int fd)
         return -1;
     }
     int sendLen = 0;
-    char *pMsg = "HTTP/1.1 200 OK \n\n Connection: close\n\n";
+    char *pMsg = "HTTP/1.1 200 OK \r\n Connection: close\r\n\r\n";
     int  totalLen = strlen(pMsg)+1;
     int totalSendLen = 0;
     while(1)
@@ -329,6 +335,11 @@ int CNet::OnWrite(int fd)
             {
                 usleep(1000);   
                 continue;
+            }
+            else 
+            { 
+                LOG(ERROR,"send return failed:%d\n",strerror(errno));
+                return -1; 
             }
         }
         totalSendLen += sendLen;
