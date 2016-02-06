@@ -103,12 +103,13 @@ int CNet::initSocket(int port,int epollSize)
 {
     m_port = port;
     m_listenFd = socket(AF_INET,SOCK_STREAM,0);
-    if ( m_listenFd < 0)
+    if ( m_listenFd <=0)
     {
         LOG(ERROR,"Create socket failed:%s",strerror(errno));
         return -1;
     }
     this->SetReuseAddr(m_listenFd,true);
+    this->SetNonBlock(m_listenFd);
     struct sockaddr_in serverAddr;
     bzero(&serverAddr,sizeof(serverAddr));
 
@@ -144,47 +145,53 @@ int CNet::CreateEpoll(int size/*=65535*/)
         return -1;
     }
 
-    AddEpoll(m_listenFd,EPOLLIN|EPOLLET);
+    AddEpoll(m_listenFd,EPOLLIN|EPOLLET,NULL);
 
     return 0;
 }
-int CNet::AddEpoll(int fd,long unsigned int fflag)
+int CNet::AddEpoll(int fd,long unsigned int fflag,int (CNet::*pFdFunc)(int))
 {
-    LOG(INFO,"add %d to epoll,events:%lu",fd,fflag);
+    struct EpollData *pData = CreateEpollData(fd,pFdFunc);
+
     struct epoll_event event;
-    event.data.fd = fd;
-    event.events = fflag;
+    event.events   = fflag;
+    event.data.ptr = (void*)pData;
     if(0 != epoll_ctl(m_epollFd,EPOLL_CTL_ADD,fd,&event))
     {
         LOG(ERROR,"add epoll event failed:%s",strerror(errno));
         return -1;
     }
+    LOG(INFO,"add %d to epoll,events:%lu",fd,fflag);
     return 0;
 }
-int CNet::DelEpoll(int fd,long unsigned int fflag)
+int CNet::DelEpoll(struct epoll_event &event,long unsigned int fflag)
 {
-    struct epoll_event event;
-    event.data.fd = fd;
     event.events  = fflag;
-    if(0 != epoll_ctl(m_epollFd,EPOLL_CTL_DEL,fd,&event))
+    if(0 != epoll_ctl(m_epollFd,EPOLL_CTL_DEL,GetFdFromEpollData((struct EpollData*)(event.data.ptr)),&event))
     {
         LOG(ERROR,"delete epoll event failed:%s",strerror(errno));
         return -1;
     }
-    close(fd);
+    if(event.data.ptr != NULL)
+    {
+        close(GetFdFromEpollData((struct EpollData*)(event.data.ptr)));
+        free(event.data.ptr);
+        event.data.ptr = NULL;
+    }
     return 0;
-
 }
-int CNet::ModEpoll(int fd,int fflag)
+int CNet::ModEpoll(int fd,long unsigned int fflag,int(CNet::*pFdFunc)(int))
 {
+    struct EpollData *pData = CreateEpollData(fd,pFdFunc);
+
     struct epoll_event event;
-    event.data.fd = fd;
-    event.events = fflag;
+    event.data.ptr = (void*)pData;
+    event.events   = fflag;
 
     LOG(INFO,"Mod %d to epoll,events:%lu",fd,fflag);
     if(0 != epoll_ctl(m_epollFd,EPOLL_CTL_MOD,fd,&event))
     {
-        LOG(ERROR,"delete epoll event failed:%s",strerror(errno));
+        LOG(ERROR,"Mod %d epoll event failed:%s",fd,strerror(errno));
         return -1;
     }
     return 0;
@@ -201,47 +208,51 @@ int CNet::EpollWait()
         max = epoll_wait(m_epollFd,m_events,MAX_EVENTS_SIZE,-1);
         if(max > 0)
         {
+            int curFd = -1;
             for(int i = 0;i < max;i++)
             {
-                if(m_events[i].data.fd == m_listenFd)
+                curFd = GetFdFromEpollData((struct EpollData*)(m_events[i].data.ptr));
+                if(curFd == m_listenFd)
                 {// accept client connect
 #ifndef _GNU_SOURCE
-                    int clientFd = accept(m_listendFd,(struct sockaddr*)&clientAddr,&clientAddrLen);
+                    clientFd = accept(m_listendFd,(struct sockaddr*)&clientAddr,&clientAddrLen);
                     SetNonBlock(clientFd);
 #else
                     // clientFd will set to :non-block
                     clientFd = accept4(m_listenFd,(struct sockaddr*)&clientAddr,&clientAddrLen,SOCK_NONBLOCK);
 #endif
                     char szIp[33]={0};
-                    LOG(DEBUG,"new client connect:%s\n",inet_ntop(AF_INET,(void*)&(clientAddr.sin_addr),szIp,clientAddrLen));
-                    if(clientFd < 0)
+                    LOG(DEBUG,"new client connect,fd[%d]:%s\n",clientFd,inet_ntop(AF_INET,(void*)&(clientAddr.sin_addr),szIp,clientAddrLen));
+                    if(clientFd <= 0)
                     {
                         LOG(ERROR,"accept client request failed:%s",strerror(errno));
                         continue;
                     }
                     // add to epoll events
-                    AddEpoll(clientFd,EPOLLIN|EPOLLET);
+                    AddEpoll(clientFd,EPOLLIN|EPOLLET,&CNet::OnRead);
                 }
                 else if(m_events[i].events & EPOLLIN) // read event
                 {
-                    if(0 == this->OnRead(m_events[i].data.fd))
+                    struct EpollData *pCurEpollData = (struct EpollData*)(m_events[i].data.ptr);
+                    if((this->*pCurEpollData->rFunc)(curFd)<=0)
                     {// client close socket
-                        DelEpoll(m_events[i].data.fd,EPOLLIN|EPOLLET);
+                        DelEpoll(m_events[i],EPOLLIN|EPOLLET);
                     }
                     else
                     {
-                        ModEpoll(m_events[i].data.fd,EPOLLOUT|EPOLLET);
+                        ModEpoll(curFd,EPOLLOUT|EPOLLET,&CNet::OnWrite);
                     }
                 }
                 else if(m_events[i].events & EPOLLOUT) // write event
                 {
-                    if(this->OnWrite(m_events[i].data.fd) < 0)
+                    struct EpollData *pCurEpollData = (struct EpollData*)(m_events[i].data.ptr);
+                    if((this->*pCurEpollData->wFunc)(curFd)<=0)
                     {
-                        DelEpoll(m_events[i].data.fd,EPOLLOUT|EPOLLET);
+                        DelEpoll(m_events[i],EPOLLOUT|EPOLLET);
                     }
                     else
                     {
-                        ModEpoll(m_events[i].data.fd,EPOLLIN|EPOLLET);
+                        ModEpoll(curFd,EPOLLIN|EPOLLET,&CNet::OnRead);
                     }
                 }
             }
@@ -263,7 +274,8 @@ int CNet::OnRead(int fd)
         LOG(ERROR,"fd is invalid:%d",fd);
         return -1;
     }
-    char buf[2] = {0};
+    // buf must not too smaller then 2 bytes,otherwise it will cause recv return -1 forever
+    char buf[14460] = {0};
     int retLen     = 0;
 
     t_msg *newmsg = NewMsg(sizeof(buf));
@@ -282,7 +294,7 @@ int CNet::OnRead(int fd)
             if(errno == EAGAIN || errno == EWOULDBLOCK)
             {
                 usleep(1000);
-                LOG(INFO,"recv return -1,try recv msg again.");
+                LOG(INFO,"recv on fd[%d] return -1,try recv msg again.",fd);
                 continue;
             }
             else if(errno == ECONNRESET)
@@ -292,7 +304,7 @@ int CNet::OnRead(int fd)
             }
             else
             {
-                LOG(ERROR,"recv return failed:%s\n",strerror(errno));
+                LOG(ERROR,"recv fd[%d] return failed:%s\n",fd ,strerror(errno));
                 break;
             }
         }
@@ -308,8 +320,8 @@ int CNet::OnRead(int fd)
         //LOG(INFO,"msg:[%s] len=%d,free=%d,newmsglen=%d\n",newmsg->buff,retLen,newmsg->free,newmsg->len);
     }
     
-    LOG(INFO,"msg:[%s] ,total len=%d\n",newmsg->buff,newmsg->len);
-    //交由业务进行处理:thread
+    LOG(INFO,"msg from fd[%d]:[%s] ,total len=%d\n",fd,newmsg->buff,newmsg->len);
+    //交由业务进行处理:thred
     //FreeMsg(newmsg);
     return newmsg->len? newmsg->len:retLen;
 }
@@ -321,7 +333,9 @@ int CNet::OnWrite(int fd)
         return -1;
     }
     int sendLen = 0;
-    char *pMsg = "HTTP/1.1 200 OK \r\n Connection: close\r\n\r\n";
+    char *pBody = "ret=0";
+    char pMsg[1024] = {0};
+    snprintf(pMsg,sizeof(pMsg),"HTTP/1.1 200 OK\r\n Connection: close\nContent-Type: text/html\r\nContent-Length: %d\r\n\r\nret=0\r\n",strlen(pBody)+1);
     int  totalLen = strlen(pMsg)+1;
     int totalSendLen = 0;
     while(1)
@@ -345,10 +359,9 @@ int CNet::OnWrite(int fd)
         totalSendLen += sendLen;
         if(totalLen <= totalSendLen)
         {
-            LOG(DEBUG,"Send response ok\n");
+            LOG(DEBUG,"Send response ok:%d\n",totalSendLen);
             return sendLen;
         }
-        LOG(INFO,"send lend:%d\n",sendLen);
     }
 }
 /**
@@ -367,4 +380,22 @@ int CNet::Dispatch2BackQueue()
 
 }
 
+int CNet::GetFdFromEpollData(struct EpollData* pEpollData)
+{
+    if(pEpollData == NULL)
+    {
+        return -1;
+    }
+    return pEpollData->fd;
+}
+
+struct EpollData* CNet::CreateEpollData(int fd,int (CNet::*pFunc)(int))
+{
+    struct EpollData *pData = NULL ;
+    pData = (struct EpollData*)malloc(sizeof(EpollData));
+    pData->wFunc = pFunc;
+    pData->rFunc = pFunc;
+    pData->fd    = fd;
+    return pData;
+}
 
