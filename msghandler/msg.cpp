@@ -69,3 +69,65 @@ t_msg* AttachBuff2Msg(t_msg**srcmsg,char* buff,int len)
 
     return *srcmsg;
 }
+//===========================msg_list=================================
+t_msg_list* CreateMsgList()
+{
+    t_msg_list * pMsgList = (t_msg_list*)malloc(sizeof(t_msg_list));
+    if(pMsgList != NULL)
+    {
+        pMsgList->node.msg = NULL; //header node
+        pMsgList->node.fd   = -1;
+        pMsgList->node.pHandler = NULL;
+        pMsgList->next = NULL; 
+    }
+    return pMsgList;
+}
+void FreeMsgList(t_msg_list *pOrgMsg)
+{
+    if(pOrgMsg != NULL)
+    {
+        if(pOrgMsg->node != NULL && pOrgMsg->node->pFreeNodeFunc) 
+        {
+            pOrgMsg->pFreeNodeFunc(pOrgMsg->node);
+        }
+        pOrgMsg->next = NULL;
+        free(pOrgMsg);
+        pOrgMsg = NULL;
+    }
+}
+t_msg_list* AddMsgToMsgList(t_msg_list *pOrgMsg,t_msg *pMsg,int fd,void (*pFreeNodeFunc)(void* ptr))
+{
+    if(NULL == pOrgMsg)
+    {
+        return NULL; 
+    }
+    t_msg_list *pNewMsgNode = (t_msg_list*)malloc(sizeof(t_msg_list));
+    if(NULL == pNewMsgNode)
+    {
+        return pOrgMsg; 
+    }
+    pNewMsgNode->node->pFreeNodeFunc= pFreeNodeFunc? pFreeNodeFunc:free;
+    pNewMsgNode->node->pHandler = ;
+    pNewmsgNode->node->fd = fd;
+    pNewMsgNode->next = NULL;
+
+}
+t_msg_node* PopTailMsglist(t_msg_list *pOrgMsg)
+{
+    t_msg_list *pHead = pOrgMsg;
+    
+    while(pHead->next && pHead->next->next)
+    {
+        pHeader = pHead->next;
+    }
+    t_msg_list *pTail = pHead->next;
+    pHeader->next = NULL;
+    return pTail->node;
+}
+t_msg_node* PopHeadMsglist(t_msg_list *pOrgMsg)
+{
+    t_msg_list *pHead = pOrgMsg;
+    pOrgMsg = pOrgMsg->next;
+    return pHead->node;
+}
+
