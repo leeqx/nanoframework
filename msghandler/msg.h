@@ -12,14 +12,14 @@ typedef struct msg
 
 t_msg* NewMsg(int size);
 void FreeMsg(t_msg *msg);
-t_msg* DupMsg(t_msg *srcmsg,t_msg *newmsg);
+t_msg* DupMsg(t_msg *srcmsg);
 t_msg* ReNewMsg(t_msg *srcmsg,int newsize);
 t_msg* AttachBuff2Msg(t_msg**srcmsg,char* buff,int len);
 
 //===========================msg_list=================================
 typedef struct msg_node
 {
-    t_msg *node;
+    t_msg *data;
     int   fd;
     //free node
     void (*pFreeNodeFunc)(void* ptr);
