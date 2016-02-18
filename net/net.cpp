@@ -291,11 +291,12 @@ int CNet::OnRead(int fd)
         }
         else if(-1 == retLen)
         {
-            if(errno == EAGAIN || errno == EWOULDBLOCK)
+            if(errno == EAGAIN || errno == EWOULDBLOCK||errno == EINTR)
             {
                 usleep(1000);
                 LOG(INFO,"recv on fd[%d] return -1,try recv msg again.",fd);
-                continue;
+                //continue;
+                break;
             }
             else if(errno == ECONNRESET)
             {
