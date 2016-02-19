@@ -12,7 +12,7 @@
 #define    INFO 1
 #define    WARN 2
 #define    MAX_EVENTS_SIZE  65535
-#define    time(x) 0
+#define    time(x) 0L
 
 #define __LOG(fd,level,fmt,...) \
     if((level) == ERROR)\

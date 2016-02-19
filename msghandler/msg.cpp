@@ -23,9 +23,10 @@ void FreeMsg(t_msg *msg)
         msg = NULL;
     }
 }
-t_msg* DupMsg(t_msg *srcmsg,t_msg *newmsg)
+t_msg* DupMsg(t_msg *srcmsg)
 {
-    if( NULL == newmsg && NULL != srcmsg)
+    t_msg * newmsg = NULL;
+    if( NULL != srcmsg)
     {
         newmsg = NewMsg(srcmsg->len + srcmsg->free);
         memcpy(newmsg,srcmsg,sizeof(srcmsg));
@@ -69,3 +70,66 @@ t_msg* AttachBuff2Msg(t_msg**srcmsg,char* buff,int len)
 
     return *srcmsg;
 }
+//===========================msg_list=================================
+t_msg_list* CreateMsgList()
+{
+    t_msg_list * pMsgList = (t_msg_list*)malloc(sizeof(t_msg_list));
+    if(pMsgList != NULL)
+    {
+        pMsgList->node.data = NULL; //header node
+        pMsgList->node.fd   = -1;
+        pMsgList->node.pHandler = NULL;
+        pMsgList->next = NULL; 
+    }
+    return pMsgList;
+}
+void FreeMsgList(t_msg_list *pOrgMsg)
+{
+    if(pOrgMsg != NULL)
+    {
+        if(pOrgMsg->node.data != NULL && pOrgMsg->node.pFreeNodeFunc) 
+        {
+            pOrgMsg->node.pFreeNodeFunc((void*)(pOrgMsg->node.data));
+        }
+        pOrgMsg->next = NULL;
+        free(pOrgMsg);
+        pOrgMsg = NULL;
+    }
+}
+t_msg_list* AddMsgToMsgList(t_msg_list *pOrgMsg,t_msg *pMsg,int fd,void (*pFreeNodeFunc)(void* ptr))
+{
+    if(NULL == pOrgMsg)
+    {
+        return NULL; 
+    }
+    t_msg_list *pNewMsgNode = (t_msg_list*)malloc(sizeof(t_msg_list));
+    if(NULL == pNewMsgNode)
+    {
+        return pOrgMsg; 
+    }
+    pNewMsgNode->node.data  = DupMsg(pMsg);
+    pNewMsgNode->node.pFreeNodeFunc= pFreeNodeFunc? pFreeNodeFunc:free;
+    pNewMsgNode->node.pHandler = NULL;
+    pNewMsgNode->node.fd = fd;
+    pNewMsgNode->next = NULL;
+
+}
+t_msg_node* PopTailMsglist(t_msg_list *pOrgMsg)
+{
+    t_msg_list *pHead = pOrgMsg;
+    
+    while(pHead->next && pHead->next->next)
+    {
+        pHead = pHead->next;
+    }
+    t_msg_list *pTail = pHead->next;
+    pHead->next = NULL;
+    return &(pTail->node);
+}
+t_msg_node* PopHeadMsglist(t_msg_list *pOrgMsg)
+{
+    t_msg_list *pHead = pOrgMsg;
+    pOrgMsg = pOrgMsg->next;
+    return &(pHead->node);
+}
+

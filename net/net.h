@@ -14,6 +14,15 @@
 
 #include <fcntl.h>
 
+class CNet;
+
+struct EpollData
+{
+    int fd;
+    int (CNet::*wFunc)(int);
+    int (CNet::*rFunc)(int);
+};
+
 class CNet
 {
     public:
@@ -57,9 +66,9 @@ class CNet
 
         int initSocket(int port,int epollSize);
         int CreateEpoll(int size=65535);
-        int AddEpoll(int fd,long unsigned int fflag);
-        int DelEpoll(int fd,long unsigned int fflag);
-        int ModEpoll(int fd,int fflag);
+        int AddEpoll(int fd,long unsigned int fflag,int (CNet::*pFdFunc)(int));
+        int DelEpoll(struct epoll_event& event,long unsigned int fflag);
+        int ModEpoll(int fd,long unsigned int fflag,int (CNet::*pFdFunc)(int));
         int EpollWait();
 
         int OnRead(int fd);
@@ -73,6 +82,8 @@ class CNet
          * 讲数据分发到后端，提供给后端线程处理
          */
         int Dispatch2BackQueue();
+        int GetFdFromEpollData(struct EpollData* pEpollData);
+        struct EpollData* CreateEpollData(int fd,int (CNet::*pFunc)(int));
     private:
         int m_listenFd;
         int m_epollFd;
