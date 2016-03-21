@@ -1,5 +1,6 @@
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "common/global.h"
 #include "net.h"
@@ -7,6 +8,11 @@
 
 CNet::CNet(int listenSize):m_listenFd(-1),m_listendSize(listenSize),m_epollFd(-1)
 {}
+CNet::CNet(int listenSize,CBaseProcess *pProcObj):m_listenFd(-1),m_listendSize(listenSize),m_epollFd(-1)
+{
+    m_pThreadPool = new CThreadPool(pProcObj);
+    assert(m_pThreadPool != NULL);
+}
 CNet::~CNet(){}
 /**
  * set fd as non-block module
@@ -324,6 +330,14 @@ int CNet::OnRead(int fd)
     LOG(INFO,"msg from fd[%d]:[%s] ,total len=%d\n",fd,newmsg->buff,newmsg->len);
     //交由业务进行处理:thred
     //FreeMsg(newmsg);
+    CMsg *pTmpMsg = new CMsg;
+    pTmpMsg->msg = (char*) malloc(newmsg->len+1);
+    memmove(pTmpMsg->msg,newmsg->buff,newmsg->len);
+    pTmpMsg->msgLength = newmsg->len;
+    pTmpMsg->socketFd  = fd;
+    pTmpMsg->pFreeMsgFunc = free;
+    m_pThreadPool->PushMsgToList(pTmpMsg);
+
     return newmsg->len? newmsg->len:retLen;
 }
 int CNet::OnWrite(int fd)

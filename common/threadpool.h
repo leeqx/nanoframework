@@ -9,19 +9,6 @@
 
 using namespace std;
 
-typedef struct _CMsg
-{
-    int socketFd;
-    // 该消息内容长度
-    int msgLength;
-    // 消息内容
-    void *msg;
-    //释放消息内存的函数
-    void (*pFreeMsgFunc)(void* msg);
-    void* ptr;
-}CMsg;
-
-
 class CThreadPool
 {
     public:

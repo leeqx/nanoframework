@@ -4,6 +4,7 @@ void* msg_handler(void* pArgs);
 CThreadPool::CThreadPool(CBaseProcess *pProcessObj,unsigned int poolSize /*=10*/,char* threadName/*="[empty]"*/):
     m_pProcessObj(pProcessObj),m_poolSize(poolSize),m_strThreadName(threadName)
 {
+    this->InitThreadPool();
 }
 
 int CThreadPool::InitThreadPool()
@@ -38,16 +39,24 @@ int CThreadPool::InitThreadPool()
 CMsg* CThreadPool::PopBackFromList()
 {
     m_mutexMsgList.Lock();
-    CMsg* pMsg = m_msgList.back();
-    m_msgList.pop_back();
+    CMsg* pMsg = NULL;
+    if(m_msgList.size())
+    {
+        pMsg = m_msgList.back();
+        m_msgList.pop_back();
+    }
     m_mutexMsgList.UnLock();
     return pMsg;
 }
 CMsg* CThreadPool::PopFrontFromList()
 {
     m_mutexMsgList.Lock();
-    CMsg* pMsg = m_msgList.front();
-    m_msgList.pop_front();
+    CMsg* pMsg = NULL;
+    if(m_msgList.size())
+    {
+        pMsg = m_msgList.front();
+        m_msgList.pop_front();
+    }
     m_mutexMsgList.UnLock();
     return pMsg;
 }
@@ -86,6 +95,7 @@ void* msg_handler(void* pArgs)
 
         if(pMsg)
         {
+            LOG(DEBUG,"recv msg:%s\n",pMsg->msg);
             pThis->m_pProcessObj->ProcessMsg(pMsg);
             pThis->FreeCMsg(pMsg);
         }

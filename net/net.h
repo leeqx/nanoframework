@@ -13,6 +13,8 @@
 
 
 #include <fcntl.h>
+#include "msghandler/base_process.h"
+#include "common/threadpool.h"
 
 class CNet;
 
@@ -27,6 +29,7 @@ class CNet
 {
     public:
         CNet(int);
+        CNet(int,CBaseProcess *pProcObj);
         virtual ~CNet();
     public:
         /**
@@ -90,6 +93,7 @@ class CNet
         int m_port;
         int m_listendSize;
         struct epoll_event m_events[65535];
+        CThreadPool *m_pThreadPool;
 };
 
 
