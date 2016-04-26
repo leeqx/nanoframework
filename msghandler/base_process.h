@@ -5,6 +5,7 @@ class CBaseProcess
     public:
         CBaseProcess();
         virtual ~CBaseProcess();
-        virtual void ProcessMsg(void* pMsg) = 0;
+        virtual void ProcessReqMsg(void* pMsg) = 0;
+        virtual void ProcessRespMsg(void* pMsg) = 0;
 };
 

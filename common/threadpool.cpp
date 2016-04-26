@@ -1,8 +1,8 @@
 #include "threadpool.h"
 void* msg_handler(void* pArgs);
 
-CThreadPool::CThreadPool(CBaseProcess *pProcessObj,unsigned int poolSize /*=10*/,char* threadName/*="[empty]"*/):
-    m_pProcessObj(pProcessObj),m_poolSize(poolSize),m_strThreadName(threadName)
+CThreadPool::CThreadPool(CBaseProcess *pProcessObj, HANDLER_TYPE type ,unsigned int poolSize /*=10*/,char* threadName/*="[empty]"*/):
+    m_pProcessObj(pProcessObj),m_poolSize(poolSize),m_strThreadName(threadName),m_handlerType(type)
 {
     this->InitThreadPool();
 }
@@ -12,12 +12,12 @@ int CThreadPool::InitThreadPool()
     if(m_pProcessObj == NULL)
     {
         LOG(ERROR,"init thread pool failed: args 1 is invalid must not NULL");
-        return -1; 
+        return -1;
     }
     if(m_poolSize <= 0)
     {
         LOG(ERROR,"init thread pool failed: args 2 is invalid must >0");
-        return -2; 
+        return -2;
     }
     pthread_t thread = 0;
     int ret = 0;
@@ -26,11 +26,11 @@ int CThreadPool::InitThreadPool()
         ret = pthread_create(&thread,NULL,msg_handler,(void*)this);
         if(ret == 0)
         {
-            m_threadList.push_back(thread); 
+            m_threadList.push_back(thread);
         }
         else
         {
-            LOG(ERROR,"[%s]-create thread failed:%s",m_strThreadName.c_str());  
+            LOG(ERROR,"[%s]-create thread failed:%s",m_strThreadName.c_str());
         }
     }
     return m_threadList.size();
@@ -64,7 +64,7 @@ void CThreadPool::FreeCMsg(CMsg*pMsg)
 {
     if(pMsg)
     {
-        pMsg->pFreeMsgFunc(pMsg->msg); 
+        pMsg->pFreeMsgFunc(pMsg->msg);
         free(pMsg);
     }
 }
@@ -90,13 +90,16 @@ void* msg_handler(void* pArgs)
     for(;;)
     {
         pThis->m_mutexMsgList.Lock();
-        CMsg* pMsg = pThis->PopBackFromList(); 
+        CMsg* pMsg = pThis->PopBackFromList();
         pThis->m_mutexMsgList.UnLock();
 
         if(pMsg)
         {
             LOG(DEBUG,"recv msg:%s\n",pMsg->msg);
-            pThis->m_pProcessObj->ProcessMsg(pMsg);
+            if(pThis->m_handlerType == EREQUEST)
+                pThis->m_pProcessObj->ProcessReqMsg(pMsg);
+            else if(pThis->m_handlerType == ERESPONSE)
+                pThis->m_pProcessObj->ProcessRespMsg(pMsg);
             pThis->FreeCMsg(pMsg);
         }
         // <todo> reload

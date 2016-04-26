@@ -10,8 +10,10 @@ CNet::CNet(int listenSize):m_listenFd(-1),m_listendSize(listenSize),m_epollFd(-1
 {}
 CNet::CNet(int listenSize,CBaseProcess *pProcObj):m_listenFd(-1),m_listendSize(listenSize),m_epollFd(-1)
 {
-    m_pThreadPool = new CThreadPool(pProcObj);
-    assert(m_pThreadPool != NULL);
+    m_pThreadReqPool = new CThreadPool(pProcObj,EREQUEST);
+    m_pThreadRespPool = new CThreadPool(pProcObj,ERESPONSE);
+    assert(m_pThreadReqPool != NULL);
+    assert(m_pThreadRespPool != NULL);
 }
 CNet::~CNet(){}
 /**
@@ -53,9 +55,9 @@ int CNet::SetKeepalive(int fd,bool alive,int idleTime,int interval,int count)
     }
     int keepAlive = alive;
     int keepIdle  = idleTime;
-    int keepIntv  = interval;  
+    int keepIntv  = interval;
     int keepCount = count;
-    
+
     setsockopt(fd,SOL_SOCKET,SO_KEEPALIVE,(char*)&keepAlive,sizeof(keepAlive));
     setsockopt(fd,SOL_TCP,TCP_KEEPIDLE,(char*)&keepIdle,sizeof(keepIdle));
     setsockopt(fd,SOL_TCP,TCP_KEEPINTVL,(char*)&keepIntv,sizeof(keepIntv));
@@ -262,7 +264,7 @@ int CNet::EpollWait()
                     }
                 }
             }
-        
+
         }
         else if(-1 == max)
         {
@@ -326,7 +328,7 @@ int CNet::OnRead(int fd)
         }
         //LOG(INFO,"msg:[%s] len=%d,free=%d,newmsglen=%d\n",newmsg->buff,retLen,newmsg->free,newmsg->len);
     }
-    
+
     LOG(INFO,"msg from fd[%d]:[%s] ,total len=%d\n",fd,newmsg->buff,newmsg->len);
     //交由业务进行处理:thred
     //FreeMsg(newmsg);
@@ -336,7 +338,7 @@ int CNet::OnRead(int fd)
     pTmpMsg->msgLength = newmsg->len;
     pTmpMsg->socketFd  = fd;
     pTmpMsg->pFreeMsgFunc = free;
-    m_pThreadPool->PushMsgToList(pTmpMsg);
+    m_pThreadReqPool->PushMsgToList(pTmpMsg);
 
     return newmsg->len? newmsg->len:retLen;
 }
@@ -362,13 +364,13 @@ int CNet::OnWrite(int fd)
             LOG(ERROR,"Send to client fd[%d] failed:%s\n",fd,strerror(errno));
             if(errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                usleep(1000);   
+                usleep(1000);
                 continue;
             }
-            else 
-            { 
+            else
+            {
                 LOG(ERROR,"send return failed:%d\n",strerror(errno));
-                return -1; 
+                return -1;
             }
         }
         totalSendLen += sendLen;

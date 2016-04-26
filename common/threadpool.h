@@ -9,10 +9,15 @@
 
 using namespace std;
 
+enum  HANDLER_TYPE
+{
+    EREQUEST=0,
+    ERESPONSE=1
+};
 class CThreadPool
 {
     public:
-        CThreadPool(CBaseProcess *pProcessObj,unsigned int poolSize=8,char* threadName="[empty]");
+        CThreadPool(CBaseProcess *pProcessObj,HANDLER_TYPE type,unsigned int poolSize=8,char* threadName="[empty]");
         ~CThreadPool();
         int InitThreadPool();
         int PushMsgToList(CMsg *msg);
@@ -33,5 +38,6 @@ class CThreadPool
         CBaseProcess *m_pProcessObj;
 
         typedef void* (CThreadPool::*pHandlerFunc)(void*);
+        HANDLER_TYPE m_handlerType;
 };
 

@@ -93,7 +93,8 @@ class CNet
         int m_port;
         int m_listendSize;
         struct epoll_event m_events[65535];
-        CThreadPool *m_pThreadPool;
+        CThreadPool *m_pThreadReqPool;
+        CThreadPool *m_pThreadRespPool;
 };
 
 

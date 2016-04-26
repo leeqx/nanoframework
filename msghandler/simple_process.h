@@ -3,5 +3,6 @@
 class CSimpleProcess:public  CBaseProcess
 {
     public:
-        virtual void ProcessMsg(void* pMsg);
+        virtual void ProcessReqMsg(void* pMsg);
+        virtual void ProcessRespMsg(void* pMsg);
 };
